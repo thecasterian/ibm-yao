@@ -8,5 +8,8 @@ LDLIBS = -lHYPRE -lm
 cavity: cavity.c
 	$(CC) $< -o $@ $(CFLAGS) $(LDLIBS)
 
+taylor-couette: taylor-couette.c
+	$(CC) $< -o $@ $(CFLAGS) $(LDLIBS)
+
 clean:
 	rm -rf cavity
