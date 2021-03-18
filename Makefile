@@ -11,5 +11,8 @@ cavity: cavity.c
 taylor-couette: taylor-couette.c
 	$(CC) $< -o $@ $(CFLAGS) $(LDLIBS)
 
+cylinder: cylinder.c
+	$(CC) $< -o $@ $(CFLAGS) $(LDLIBS)
+
 clean:
 	rm -rf cavity
