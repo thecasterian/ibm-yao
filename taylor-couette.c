@@ -20,7 +20,7 @@
 #define nu 1e-2
 
 #define dt 0.02
-#define numtsteps 1000
+#define numtsteps 5000
 
 enum flag {
     SOLID,
@@ -288,8 +288,14 @@ void build_hypre(void) {
                 };
                 if (i == 1) values[1] = 0;
                 if (i == Nx-1) values[2] = 0;
-                if (j == 1) values[3] = 0;
-                if (j == Ny) values[4] = 0;
+                if (j == 1) {
+                    values[0] -= values[3];
+                    values[3] = 0;
+                }
+                if (j == Ny) {
+                    values[0] -= values[4];
+                    values[4] = 0;
+                }
                 HYPRE_StructMatrixSetBoxValues(A_u, ii, ii,
                                                5, stencil_indices, values);
             }
@@ -333,8 +339,14 @@ void build_hypre(void) {
                     -nu*dt/2*bs[j],
                     -nu*dt/2*bn[j]
                 };
-                if (i == 1) values[1] = 0;
-                if (i == Nx) values[2] = 0;
+                if (i == 1) {
+                    values[0] -= values[1];
+                    values[1] = 0;
+                }
+                if (i == Nx) {
+                    values[0] -= values[2];
+                    values[2] = 0;
+                }
                 if (j == 1) values[3] = 0;
                 if (j == Ny-1) values[4] = 0;
                 HYPRE_StructMatrixSetBoxValues(A_v, ii, ii,
@@ -380,11 +392,26 @@ void build_hypre(void) {
                     -cs[j]/csum[i][j],
                     -cn[j]/csum[i][j]
                 };
-                if (i == 1) values[1] = 0;
-                if (i == Nx) values[2] = 0;
-                if (j == 1) values[3] = 0;
-                if (j == Ny) values[4] = 0;
-                if (i == 1 && j == 1) values[1] = values[2] = values[3] = values[4] = 0;
+                if (i == 1) {
+                    values[0] += values[1];
+                    values[1] = 0;
+                }
+                if (i == Nx) {
+                    values[0] += values[2];
+                    values[2] = 0;
+                }
+                if (j == 1) {
+                    values[0] += values[3];
+                    values[3] = 0;
+                }
+                if (j == Ny) {
+                    values[0] += values[4];
+                    values[4] = 0;
+                }
+                if (i == 1 && j == 1) {
+                    values[0] = 1;
+                    values[1] = values[2] = values[3] = values[4] = 0;
+                }
                 HYPRE_StructMatrixSetBoxValues(A_p, ii, ii,
                                                5, stencil_indices, values);
             }
@@ -497,10 +524,6 @@ void calc_vel_RHS(void) {
                 = -dt/2*(3*N1[i][j]-N1_prev[i][j]) - dt/rho*(p[i+1][j]-p[i][j])/(xc[i+1]-xc[i])
                 + u[i][j] + nu*dt/2 * (aw[i]*u[i-1][j] + ae[i]*u[i+1][j] + as[j]*u[i][j-1] + an[j]*u[i][j+1]
                                        - (aw[i]+ae[i]+as[j]+an[j])*u[i][j]);
-            if (i == 1) RHS_u[m] += nu*dt/2*aw[i]*u_star[0][j];
-            if (i == Nx-1) RHS_u[m] += nu*dt/2*ae[i]*u_star[Nx][j];
-            if (j == 1) RHS_u[m] += nu*dt/2*as[j]*u_star[i][0];
-            if (j == Ny) RHS_u[m] += nu*dt/2*an[j]*u_star[i][Ny+1];
             m++;
         }
 
@@ -511,10 +534,6 @@ void calc_vel_RHS(void) {
                 = -dt/2*(3*N2[i][j]-N2_prev[i][j]) - dt/rho*(p[i][j+1]-p[i][j])/(yc[j+1]-yc[j])
                 + v[i][j] + nu*dt/2 * (bw[i]*v[i-1][j] + be[i]*v[i+1][j] + bs[j]*v[i][j-1] + bn[j]*v[i][j+1]
                                        - (bw[i]+be[i]+bs[j]+bn[j])*v[i][j]);
-            if (i == 1) RHS_v[m] += nu*dt/2*bw[i]*v_star[0][j];
-            if (i == Nx) RHS_v[m] += nu*dt/2*be[i]*v_star[Nx+1][j];
-            if (j == 1) RHS_v[m] += nu*dt/2*bs[j]*v_star[i][0];
-            if (j == Ny-1) RHS_v[m] += nu*dt/2*bn[j]*v_star[i][Ny];
             m++;
         }
 }
@@ -566,10 +585,6 @@ void calc_pre_RHS(void) {
         for (int i = 1; i <= Nx; i++) {
             RHS_p[m] = -rho/(dt*csum[i][j]) * ((u_star[i][j]-u_star[i-1][j])/dx[i]
                                                + (v_star[i][j]-v_star[i][j-1])/dy[j]);
-            if (i == 1) RHS_p[m] += cw[i]/csum[i][j]*p_prime[0][j];
-            if (i == Nx) RHS_p[m] += ce[i]/csum[i][j]*p_prime[Nx+1][j];
-            if (j == 1) RHS_p[m] += cs[j]/csum[i][j]*p_prime[i][0];
-            if (j == Ny) RHS_p[m] += cn[j]/csum[i][j]*p_prime[i][Ny+1];
             if (i == 1 && j == 1) RHS_p[m] = 0;
             m++;
         }
@@ -577,12 +592,12 @@ void calc_pre_RHS(void) {
 
 void update_pre_corr(void) {
     for (int i = 0; i <= Nx+1; i++) {
-        p_prime[i][0] = -p_prime[i][1];
-        p_prime[i][Ny+1] = -p_prime[i][Ny];
+        p_prime[i][0] = p_prime[i][1];
+        p_prime[i][Ny+1] = p_prime[i][Ny];
     }
     for (int j = 0; j <= Ny+1; j++) {
-        p_prime[0][j] = -p_prime[1][j];
-        p_prime[Nx+1][j] = -p_prime[Nx][j];
+        p_prime[0][j] = p_prime[1][j];
+        p_prime[Nx+1][j] = p_prime[Nx][j];
     }
 }
 
@@ -611,12 +626,12 @@ void update_all(void) {
     }
 
     for (int i = 0; i <= Nx+1; i++) {
-        p[i][0] = -p[i][1];
-        p[i][Ny+1] = -p[i][Ny];
+        p[i][0] = p[i][1];
+        p[i][Ny+1] = p[i][Ny];
     }
     for (int j = 0; j <= Ny+1; j++) {
-        p[0][j] = -p[1][j];
-        p[Nx+1][j] = -p[Nx][j];
+        p[0][j] = p[1][j];
+        p[Nx+1][j] = p[Nx][j];
     }
 }
 
@@ -734,10 +749,6 @@ void calc_pre_RHS2(void) {
         for (int i = 1; i <= Nx; i++) {
             RHS_p[m] = -rho/csum[i][j] * ((fx[i][j]-fx[i-1][j])/dx[i]
                                           + (fy[i][j]-fy[i][j-1])/dy[j]);
-            if (i == 1) RHS_p[m] += cw[i]/csum[i][j]*p_prime2[0][j];
-            if (i == Nx) RHS_p[m] += ce[i]/csum[i][j]*p_prime2[Nx+1][j];
-            if (j == 1) RHS_p[m] += cs[j]/csum[i][j]*p_prime2[i][0];
-            if (j == Ny) RHS_p[m] += cn[j]/csum[i][j]*p_prime2[i][Ny+1];
             if (i == 1 && j == 1) RHS_p[m] = 0;
             m++;
         }
@@ -745,13 +756,54 @@ void calc_pre_RHS2(void) {
 
 void update_pre_corr2(void) {
     for (int i = 0; i <= Nx+1; i++) {
-        p_prime2[i][0] = -p_prime2[i][1];
-        p_prime2[i][Ny+1] = -p_prime2[i][Ny];
+        p_prime2[i][0] = p_prime2[i][1];
+        p_prime2[i][Ny+1] = p_prime2[i][Ny];
     }
     for (int j = 0; j <= Ny+1; j++) {
-        p_prime2[0][j] = -p_prime2[1][j];
-        p_prime2[Nx+1][j] = -p_prime2[Nx][j];
+        p_prime2[0][j] = p_prime2[1][j];
+        p_prime2[Nx+1][j] = p_prime2[Nx][j];
     }
+}
+
+void update_all2(void) {
+    for (int i = 1; i <= Nx-1; i++)
+        for (int j = 1; j <= Ny; j++)
+            u[i][j]
+                = u[i][j]
+                - dt/rho*(p_prime2[i+1][j]-p_prime2[i][j])/(xc[i+1]-xc[i])
+                + fx[i][j]*dt;
+    for (int i = 1; i <= Nx; i++)
+        for (int j = 1; j <= Ny-1; j++)
+            v[i][j]
+                = v[i][j]
+                - dt/rho*(p_prime2[i][j+1]-p_prime2[i][j])/(yc[j+1]-yc[j])
+                + fy[i][j]*dt;
+    for (int i = 1; i <= Nx; i++)
+        for (int j = 1; j <= Ny; j++)
+            p[i][j] += p_prime2[i][j];
+
+    for (int j = 0; j <= Ny+1; j++) u[0][j] = u[Nx][j] = 0;
+    for (int i = 0; i <= Nx; i++) {
+        u[i][0] = -u[i][1];
+        u[i][Ny+1] = -u[i][Ny];
+    }
+    for (int i = 0; i <= Nx+1; i++) v[i][0] = v[i][Ny] = 0;
+    for (int j = 0; j <= Ny; j++) {
+        v[0][j] = -v[1][j];
+        v[Nx+1][j] = -v[Nx][j];
+    }
+
+    for (int i = 0; i <= Nx+1; i++) {
+        p[i][0] = p[i][1];
+        p[i][Ny+1] = p[i][Ny];
+    }
+    for (int j = 0; j <= Ny+1; j++) {
+        p[0][j] = p[1][j];
+        p[Nx+1][j] = p[Nx][j];
+    }
+
+    memcpy(N1_prev, N1, sizeof(N1));
+    memcpy(N2_prev, N2, sizeof(N2));
 }
 
 void export(void) {
@@ -786,45 +838,4 @@ void export(void) {
         }
         fclose(fp);
     }
-}
-
-void update_all2(void) {
-    for (int i = 1; i <= Nx-1; i++)
-        for (int j = 1; j <= Ny; j++)
-            u[i][j]
-                = u[i][j]
-                - dt/rho*(p_prime2[i+1][j]-p_prime2[i][j])/(xc[i+1]-xc[i])
-                + fx[i][j]*dt;
-    for (int i = 1; i <= Nx; i++)
-        for (int j = 1; j <= Ny-1; j++)
-            v[i][j]
-                = v[i][j]
-                - dt/rho*(p_prime2[i][j+1]-p_prime2[i][j])/(yc[j+1]-yc[j])
-                + fy[i][j]*dt;
-    for (int i = 1; i <= Nx; i++)
-        for (int j = 1; j <= Ny; j++)
-            p[i][j] += p_prime2[i][j];
-
-    for (int j = 0; j <= Ny+1; j++) u[0][j] = u[Nx][j] = 0;
-    for (int i = 0; i <= Nx; i++) {
-        u[i][0] = -u[i][1];
-        u[i][Ny+1] = -u[i][Ny];
-    }
-    for (int i = 0; i <= Nx+1; i++) v[i][0] = v[i][Ny] = 0;
-    for (int j = 0; j <= Ny; j++) {
-        v[0][j] = -v[1][j];
-        v[Nx+1][j] = -v[Nx][j];
-    }
-
-    for (int i = 0; i <= Nx+1; i++) {
-        p[i][0] = -p[i][1];
-        p[i][Ny+1] = -p[i][Ny];
-    }
-    for (int j = 0; j <= Ny+1; j++) {
-        p[0][j] = -p[1][j];
-        p[Nx+1][j] = -p[Nx][j];
-    }
-
-    memcpy(N1_prev, N1, sizeof(N1));
-    memcpy(N2_prev, N2, sizeof(N2));
 }

@@ -62,6 +62,8 @@ ax.add_patch(wi)
 ax.add_patch(wo)
 ax.set_aspect('equal', 'box')
 
+fig.tight_layout()
+
 #%%
 fig, ax = plt.subplots()
 
@@ -74,5 +76,7 @@ vt = np.hstack((ut, -ut))
 ax.plot(xc, v[:, Ny//2])
 ax.plot(x, vt, 'ro', markersize=3)
 ax.legend(['IBM', 'Theory'])
+
+fig.tight_layout()
 
 plt.show()
